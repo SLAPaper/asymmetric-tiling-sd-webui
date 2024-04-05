@@ -11,7 +11,7 @@ import modules.sd_hijack
 import modules.shared
 
 try:
-    import modules_forge  # type: ignore
+    from modules_forge.unet_patcher import UnetPatcher  # type: ignore
 
     IS_FORGE = True
 except ImportError:
@@ -55,16 +55,21 @@ class Script(modules.scripts.Script):
 
             # Modify the model's Conv2D layers to perform our chosen tiling.
             if IS_FORGE:
-                unet = p.sd_model.forge_objects.unet
-                layers = [layer for layer in unet.modules() if isinstance(layer, Conv2d)]
+                unet_patcher = tg.cast(UnetPatcher, p.sd_model.forge_objects.unet).clone()
+                layers = [layer for layer in unet_patcher.model.modules() if isinstance(layer, Conv2d)]
                 self.__hijackConv2DMethods(layers, tileX, tileY, startStep, stopStep)
-                p.sd_model.forge_objects.unet = unet
+                p.sd_model.forge_objects.unet = unet_patcher
             else:
                 layers = [layer for layer in tg.cast(list, modules.sd_hijack.model_hijack.layers) if isinstance(layer, Conv2d)]
                 self.__hijackConv2DMethods(layers, tileX, tileY, startStep, stopStep)
         else:
             # Restore model behaviour to normal.
-            if not IS_FORGE:
+            if IS_FORGE:
+                unet_patcher = tg.cast(UnetPatcher, p.sd_model.forge_objects.unet).clone()
+                layers = [layer for layer in unet_patcher.model.modules() if isinstance(layer, Conv2d)]
+                self.__restoreConv2DMethods(layers)
+                p.sd_model.forge_objects.unet = unet_patcher
+            else:
                 layers = [layer for layer in tg.cast(list, modules.sd_hijack.model_hijack.layers) if layer if isinstance(layer, Conv2d)]
                 self.__restoreConv2DMethods(layers)
 
